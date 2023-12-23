@@ -1,3 +1,5 @@
+use clap::builder::ValueParserFactory;
+
 #[derive(Debug)]
 pub enum DecodedList {
     Int(i64),
@@ -21,7 +23,7 @@ impl Decoder {
             let val = self.decode_bencoded_value();
             return val;
         }
-        if self.encoded_value.starts_with('l') && self.encoded_value.ends_with('e') {
+        if self.encoded_value.starts_with('l') {
             let val = self.decode_bencoded_lists();
             return serde_json::Value::String("Decoded list".to_string());
         }
@@ -35,7 +37,7 @@ impl Decoder {
         serde_json::Value::String(string.to_string())
     }
 
-    fn decode_bencoded_lists(&mut self) -> Vec<DecodedList> {
+    fn decode_bencoded_lists(&mut self) -> Vec<String> {
         let mut list = String::from("");
         let mut dcl: Vec<DecodedList> = Vec::new();
         let colon = self.encoded_value.find(':').unwrap();
@@ -46,41 +48,34 @@ impl Decoder {
         let decoded_ints = self.decode_bencoded_integer();
         let mut newString: Vec<String> = Vec::new();
         let mut first = true;
-        dbg!(&self.integers);
+        let mut first_int = String::from("");
+        let mut changed_int = false;
+        let before_semi = self.length_before_colon();
         for (i, num, e) in &self.integers {
             if let Some(e) = e {
                 if !first {
-                    dbg!(&value[*e - 2..*i - 1]);
-                    newString.push(value[*e..*i].to_string());
+                    let val = value
+                        [*e - 1 - before_semi..value.chars().count().checked_sub(1).unwrap() + 1]
+                        .to_string();
+                    newString.push(val);
                 }
+                first_int.push(num.to_string().parse::<char>().unwrap());
+                first_int.push(' ');
             } else {
-                continue;
-            }
-            if first {
-                newString.push(value[0..*i - 3].to_string());
-                first = false;
-                continue;
+                if first {
+                    newString.push(value[0..*i - 2].to_string());
+                    first = false;
+                }
+                first_int.push(num.to_string().parse::<char>().unwrap());
             }
         }
+        dbg!(&first_int);
         dbg!(&newString);
-        for int in decoded_ints {
-            list.push(' ');
-            for (i, n) in int.to_string().chars().enumerate() {
-                list.push(n);
-            }
-        }
         let newlist: Vec<String> = list.split_whitespace().map(|f| f.to_string()).collect();
-        dbg!(&newlist);
-        for f in newlist {
-            if let Ok(parsed_int) = f.parse::<i64>() {
-                dcl.push(DecodedList::Int(parsed_int));
-            }
-            if let Ok(str) = f.parse::<String>() {
-                dcl.push(DecodedList::String(str));
-            }
+        for item in newlist {
+            newString.push(item);
         }
-        for data in dcl.iter() {}
-        dcl
+        newString
     }
     fn length_before_colon(&mut self) -> usize {
         let semi = self.encoded_value.find(':').unwrap();
@@ -92,10 +87,11 @@ impl Decoder {
         let mut modified = false;
         let mut parsed_ints: Vec<i64> = Vec::new();
         let before_semi = self.length_before_colon();
+        dbg!(&before_semi);
         for (i, char) in self.encoded_value.chars().enumerate() {
             if previous_char == "i" && (char.is_numeric() || char.to_string() == "-") {
                 self.integers.push((
-                    i - before_semi,
+                    i - (before_semi + 1),
                     char.to_string().parse::<i64>().unwrap(),
                     None,
                 ));
