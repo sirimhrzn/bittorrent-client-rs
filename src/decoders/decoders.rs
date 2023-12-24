@@ -42,7 +42,7 @@ impl Decoder {
         let mut dcl: Vec<DecodedList> = Vec::new();
         let colon = self.encoded_value.find(':').unwrap();
         let value = self.encoded_value
-            [colon + 1..self.encoded_value.chars().count().checked_sub(1).unwrap()]
+            [colon + 1..self.encoded_value.chars().count().checked_sub(1).unwrap() + 1]
             .to_string();
 
         let decoded_ints = self.decode_bencoded_integer();
@@ -54,8 +54,11 @@ impl Decoder {
         for (i, num, e) in &self.integers {
             if let Some(e) = e {
                 if !first {
+                    if self.integers.len() == 1 {
+                        break;
+                    }
                     let val = value
-                        [*e - 1 - before_semi..value.chars().count().checked_sub(1).unwrap() + 1]
+                        [*e - before_semi - 2..value.chars().count().checked_sub(1).unwrap() + 1]
                         .to_string();
                     newString.push(val);
                 }
@@ -63,7 +66,8 @@ impl Decoder {
                 first_int.push(' ');
             } else {
                 if first {
-                    newString.push(value[0..*i - 2].to_string());
+                    newString.push(value[0..*i - 1].to_string());
+
                     first = false;
                 }
                 first_int.push(num.to_string().parse::<char>().unwrap());
@@ -77,11 +81,12 @@ impl Decoder {
         }
         newString
     }
+    // make this length till colon
     fn length_before_colon(&mut self) -> usize {
         let semi = self.encoded_value.find(':').unwrap();
         self.encoded_value[0..semi].len()
     }
-    fn decode_bencoded_integer(&mut self) -> Vec<i64> {
+    pub fn decode_bencoded_integer(&mut self) -> Vec<i64> {
         let mut previous_char = "";
         let mut current_sequence = String::from("");
         let mut modified = false;
@@ -89,7 +94,7 @@ impl Decoder {
         let before_semi = self.length_before_colon();
         dbg!(&before_semi);
         for (i, char) in self.encoded_value.chars().enumerate() {
-            if previous_char == "i" && (char.is_numeric() || char.to_string() == "-") {
+            if previous_char == "i" && (char.is_numeric() || char == '-') {
                 self.integers.push((
                     i - (before_semi + 1),
                     char.to_string().parse::<i64>().unwrap(),
@@ -104,12 +109,15 @@ impl Decoder {
                         data.2 = Some(i - before_semi);
                     }
                 }
+                previous_char = "";
                 parsed_ints.push(current_sequence.parse::<i64>().unwrap());
+                current_sequence = "".to_string();
             }
-            if char.to_string().to_lowercase() == "i" {
+            if char.to_string().to_lowercase() == "i" && previous_char != "i" {
                 previous_char = "i";
             }
         }
+        dbg!(&parsed_ints);
         parsed_ints
     }
 }
